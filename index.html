@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>인주회중 야외봉사 앱</title>
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json?v=4.0.1">
 <meta name="theme-color" content="#153b63">
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -20,7 +20,7 @@ body{padding-bottom:76px}.screen{display:none;min-height:100vh;padding:14px}.scr
     <div class="logo">인주회중의<br>야외봉사 앱</div>
     <div class="welcome">즐거운 마음으로<br>봉사합시다!</div>
     <div class="verse">“왕국의 좋은 소식이<br>사람이 거주하는 온 땅에 전파될 것입니다.”<br><b>— 마태복음 24:14</b></div>
-    <button class="btn mt" onclick="go('home')">시작하기</button>
+    <button id="startBtn" type="button" class="btn mt" onclick="go('home')">시작하기</button>
     <a class="jw" href="https://www.jw.org/ko/" target="_blank" rel="noopener">JW.ORG</a>
   </div>
 </section>
@@ -117,8 +117,18 @@ function setStatus(addr,st){localStorage.setItem(statusKey(addr),st);renderHouse
 function renderHouses(){let list=getHouses();$('areaName').textContent=currentArea;$('visitTitle').textContent='호별방문';let done=list.filter(a=>localStorage.getItem(statusKey(a))).length;$('progressText').textContent=done+'/'+list.length;$('bar').style.width=list.length?Math.round(done/list.length*100)+'%':'0%';let h=$('houses');h.innerHTML='';list.forEach((addr,i)=>{let st=localStorage.getItem(statusKey(addr))||'';let div=document.createElement('div');div.className='house';div.innerHTML=`<div class="house-head"><span>${i+1}. 건물</span><span>${st||'미기록'}</span></div><div class="house-addr">${addr}</div><div class="status-row"><button class="done ${st==='방문함'?'selected':''}" onclick="setStatus('${addr}','방문함')">방문함</button><button class="abs ${st==='부재중'?'selected':''}" onclick="setStatus('${addr}','부재중')">부재중</button><button class="rej ${st==='방문거절'?'selected':''}" onclick="setStatus('${addr}','방문거절')">방문거절</button><button class="etc ${st==='기타'?'selected':''}" onclick="setStatus('${addr}','기타')">기타</button></div>`;h.appendChild(div)})}
 function saveFinish(){localStorage.setItem('inju_safe',$('safeCheck').checked?'yes':'no');localStorage.setItem('inju_finish_memo',$('finishMemo').value);$('finishMsg').textContent='저장되었습니다.'}
 function resetToday(){if(!confirm('오늘 기록을 초기화할까요? 참여자와 방문상태가 지워집니다.'))return;Object.keys(localStorage).filter(k=>k.startsWith('inju_status_')).forEach(k=>localStorage.removeItem(k));names=names.map(p=>({...p,on:false}));saveNames();$('safeCheck').checked=false;$('finishMemo').value='';localStorage.removeItem('inju_safe');localStorage.removeItem('inju_finish_memo');$('finishMsg').textContent='초기화되었습니다.';renderHouses()}
-$('safeCheck').checked=localStorage.getItem('inju_safe')==='yes';$('finishMemo').value=localStorage.getItem('inju_finish_memo')||'';renderNames();renderHouses();
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}
+document.addEventListener('DOMContentLoaded',()=>{
+  const startBtn=$('startBtn');
+  if(startBtn){
+    startBtn.addEventListener('click',(e)=>{e.preventDefault();go('home')});
+    startBtn.addEventListener('touchend',(e)=>{e.preventDefault();go('home')},{passive:false});
+  }
+  $('safeCheck').checked=localStorage.getItem('inju_safe')==='yes';
+  $('finishMemo').value=localStorage.getItem('inju_finish_memo')||'';
+  renderNames();
+  renderHouses();
+});
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js?v=4.0.1').catch(()=>{}))}
 </script>
 </body>
 </html>
