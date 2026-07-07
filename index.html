@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>인주회중 야외봉사 앱 테스트</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR","Malgun Gothic",sans-serif;background:#f4f7fb;color:#111}
+header{background:#153b63;color:white;text-align:center;padding:13px 8px;font-weight:900;font-size:21px}
+.sub{font-size:13px;opacity:.9;margin-top:4px}
+.wrap{max-width:1100px;margin:0 auto;padding:8px}
+.panel{background:white;border-radius:16px;padding:10px;margin-bottom:8px;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.tabs{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.tab{border:0;border-radius:12px;padding:13px 7px;font-weight:900;background:#e8eef7;color:#153b63;font-size:15px}
+.tab.active{background:#153b63;color:#fff}
+.summary{display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:900;color:#153b63}
+.small{font-size:13px;color:#555;line-height:1.5;margin-top:5px}
+#map{height:46vh;min-height:330px;width:100%;border-radius:16px;border:2px solid #153b63}
+.locBtn,.resetBtn{width:100%;border:0;border-radius:11px;color:white;font-weight:900;padding:11px;margin-top:7px;font-size:15px}
+.locBtn{background:#153b63}.resetBtn{background:#64748b}
+.gpsBox{margin-top:8px;border:2px solid #d9e1ec;border-radius:13px;padding:9px;background:#f8fafc;font-size:14px;font-weight:800;line-height:1.6}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;font-size:12px}
+.legend span{background:#f0f3f8;border-radius:999px;padding:5px 8px}
+.searchBox{width:100%;border:2px solid #153b63;border-radius:12px;padding:11px;font-size:16px;font-weight:800;margin-top:8px}
+.addrWrap{max-height:42vh;overflow:auto;border:1px solid #d9e1ec;border-radius:12px;margin-top:8px}
+.addrHeader,.addrRow{display:grid;grid-template-columns:46px 82px 1.1fr 1fr 104px;gap:4px;align-items:center}
+.addrHeader{position:sticky;top:0;background:#153b63;color:white;font-size:12px;font-weight:900;padding:7px 6px;z-index:3}
+.addrRow{min-height:40px;padding:5px 6px;border-bottom:1px solid #edf1f7;background:white;font-size:13px}
+.addrRow:nth-child(even){background:#f8fafc}.addrRow.active{outline:3px solid #153b63;background:#eef6ff}
+.seq{color:#64748b;font-weight:800;text-align:center}.no{font-size:16px;font-weight:900;color:#153b63;white-space:nowrap}
+.road{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.name{color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.statusBtns{display:grid;grid-template-columns:1fr 1fr;gap:3px}
+.statusBtns button{border:0;border-radius:7px;padding:5px 2px;font-weight:900;font-size:10px}
+.done{background:#dff5e5}.absent{background:#fff1c7}.reject{background:#ffe0e0}.empty{background:#e5e7eb}
+.marker-label{background:white;border:2px solid #153b63;color:#153b63;border-radius:999px;padding:3px 6px;font-size:12px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,.25);white-space:nowrap}
+.marker-done{border-color:#16a34a;color:#166534;background:#dcfce7}.marker-absent{border-color:#f59e0b;color:#92400e;background:#fef3c7}
+.marker-reject{border-color:#dc2626;color:#991b1b;background:#fee2e2}.marker-empty{border-color:#111827;color:#111827;background:#e5e7eb}
+@media(max-width:700px){
+ #map{height:42vh;min-height:300px}
+ .addrHeader,.addrRow{grid-template-columns:38px 72px 1fr 0px 92px}
+ .name,.addrHeader div:nth-child(4),.addrRow div:nth-child(4){display:none}
+ .statusBtns button{font-size:10px;padding:5px 1px}
+}
+</style>
+</head>
+<body>
+<header>인주회중 야외봉사 앱 테스트<div class="sub">백석포 보건소B · 와우리 마을회관</div></header>
+<div class="wrap">
+  <div class="panel">
+    <div class="tabs" id="tabs"></div>
+    <div class="small">오늘 테스트용 2개 구역만 들어간 가벼운 버전입니다.</div>
+  </div>
+  <div class="panel">
+    <div class="summary"><div id="areaTitle"></div><div id="progress"></div></div>
+    <button class="locBtn" onclick="startGps()">📍 GPS 추적 시작</button>
+    <div class="gpsBox" id="gpsStatus">GPS 대기 중입니다.</div>
+    <button class="resetBtn" onclick="resetCurrentArea()">현재 구역 방문기록 초기화</button>
+  </div>
+  <div class="panel">
+    <div id="map"></div>
+    <div class="legend"><span>🟦 구역</span><span>🟢 완료</span><span>🟡 부재</span><span>🔴 거절</span><span>⚫ 기타</span></div>
+  </div>
+  <div class="panel">
+    <div class="summary"><div>방문 주소록</div><div id="countText"></div></div>
+    <input class="searchBox" id="search" placeholder="건물번호·이름 검색" oninput="renderAddressBook()">
+    <div class="addrWrap">
+      <div class="addrHeader"><div>순</div><div>건물</div><div>주소</div><div>메모</div><div>상태</div></div>
+      <div id="addrList"></div>
+    </div>
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const areas={"12_04 백석포 보건소B": {"color": "#2563eb", "fill": "#bfdbfe", "center": [36.8845, 126.925], "houses": [{"seq": 1, "no": "3493", "road": "백석포 보건소B", "name": "", "lat": 36.8865, "lng": 126.9225, "status": ""}, {"seq": 2, "no": "3495", "road": "백석포 보건소B", "name": "", "lat": 36.88658, "lng": 126.9234, "status": ""}, {"seq": 3, "no": "3496", "road": "백석포 보건소B", "name": "", "lat": 36.8865, "lng": 126.9243, "status": ""}, {"seq": 4, "no": "3497", "road": "백석포 보건소B", "name": "", "lat": 36.88658, "lng": 126.9252, "status": ""}, {"seq": 5, "no": "3499", "road": "백석포 보건소B", "name": "", "lat": 36.8865, "lng": 126.9261, "status": ""}, {"seq": 6, "no": "3500", "road": "백석포 보건소B", "name": "", "lat": 36.88658, "lng": 126.927, "status": ""}, {"seq": 7, "no": "3501", "road": "백석포 보건소B", "name": "", "lat": 36.88595, "lng": 126.9225, "status": ""}, {"seq": 8, "no": "3502", "road": "백석포 보건소B", "name": "", "lat": 36.88603, "lng": 126.9234, "status": ""}, {"seq": 9, "no": "3503", "road": "백석포 보건소B", "name": "", "lat": 36.88595, "lng": 126.9243, "status": ""}, {"seq": 10, "no": "3504", "road": "백석포 보건소B", "name": "", "lat": 36.88603, "lng": 126.9252, "status": ""}, {"seq": 11, "no": "3505", "road": "백석포 보건소B", "name": "", "lat": 36.88595, "lng": 126.9261, "status": ""}, {"seq": 12, "no": "3506", "road": "백석포 보건소B", "name": "", "lat": 36.88603, "lng": 126.927, "status": ""}, {"seq": 13, "no": "3507", "road": "백석포 보건소B", "name": "", "lat": 36.8854, "lng": 126.9225, "status": ""}, {"seq": 14, "no": "3508", "road": "백석포 보건소B", "name": "", "lat": 36.88548, "lng": 126.9234, "status": ""}, {"seq": 15, "no": "3509", "road": "백석포 보건소B", "name": "", "lat": 36.8854, "lng": 126.9243, "status": ""}, {"seq": 16, "no": "3510", "road": "백석포 보건소B", "name": "", "lat": 36.88548, "lng": 126.9252, "status": ""}, {"seq": 17, "no": "3511", "road": "백석포 보건소B", "name": "", "lat": 36.8854, "lng": 126.9261, "status": ""}, {"seq": 18, "no": "3512", "road": "백석포 보건소B", "name": "", "lat": 36.88548, "lng": 126.927, "status": ""}, {"seq": 19, "no": "3513", "road": "백석포 보건소B", "name": "", "lat": 36.88485, "lng": 126.9225, "status": ""}, {"seq": 20, "no": "3514", "road": "백석포 보건소B", "name": "", "lat": 36.88493, "lng": 126.9234, "status": ""}, {"seq": 21, "no": "3515", "road": "백석포 보건소B", "name": "", "lat": 36.88485, "lng": 126.9243, "status": ""}, {"seq": 22, "no": "3516", "road": "백석포 보건소B", "name": "", "lat": 36.88493, "lng": 126.9252, "status": ""}, {"seq": 23, "no": "3517", "road": "백석포 보건소B", "name": "", "lat": 36.88485, "lng": 126.9261, "status": ""}, {"seq": 24, "no": "3518", "road": "백석포 보건소B", "name": "", "lat": 36.88493, "lng": 126.927, "status": ""}, {"seq": 25, "no": "3519", "road": "백석포 보건소B", "name": "", "lat": 36.8843, "lng": 126.9225, "status": ""}, {"seq": 26, "no": "3520", "road": "백석포 보건소B", "name": "", "lat": 36.88438, "lng": 126.9234, "status": ""}, {"seq": 27, "no": "3521", "road": "백석포 보건소B", "name": "", "lat": 36.8843, "lng": 126.9243, "status": ""}, {"seq": 28, "no": "3522", "road": "백석포 보건소B", "name": "", "lat": 36.88438, "lng": 126.9252, "status": ""}, {"seq": 29, "no": "3523", "road": "백석포 보건소B", "name": "", "lat": 36.8843, "lng": 126.9261, "status": ""}, {"seq": 30, "no": "3524", "road": "백석포 보건소B", "name": "", "lat": 36.88438, "lng": 126.927, "status": ""}, {"seq": 31, "no": "3525", "road": "백석포 보건소B", "name": "", "lat": 36.88375, "lng": 126.9225, "status": ""}, {"seq": 32, "no": "6", "road": "백석포 보건소B", "name": "타종교", "lat": 36.88383, "lng": 126.9234, "status": "reject"}, {"seq": 33, "no": "7", "road": "백석포 보건소B", "name": "공장", "lat": 36.88375, "lng": 126.9243, "status": ""}], "polygon": [[36.887, 126.922], [36.887, 126.9282], [36.8817, 126.9282], [36.8817, 126.922]]}, "13_01 와우리 마을회관": {"color": "#16a34a", "fill": "#bbf7d0", "center": [36.892, 126.936], "houses": [{"seq": 1, "no": "2358", "road": "와우리 마을회관", "name": "", "lat": 36.894, "lng": 126.9335, "status": ""}, {"seq": 2, "no": "2359", "road": "와우리 마을회관", "name": "", "lat": 36.89408, "lng": 126.9344, "status": ""}, {"seq": 3, "no": "2360", "road": "와우리 마을회관", "name": "", "lat": 36.894, "lng": 126.9353, "status": ""}, {"seq": 4, "no": "2361", "road": "와우리 마을회관", "name": "", "lat": 36.89408, "lng": 126.9362, "status": ""}, {"seq": 5, "no": "2362", "road": "와우리 마을회관", "name": "", "lat": 36.894, "lng": 126.9371, "status": ""}, {"seq": 6, "no": "2363", "road": "와우리 마을회관", "name": "", "lat": 36.89408, "lng": 126.938, "status": ""}, {"seq": 7, "no": "2364", "road": "와우리 마을회관", "name": "", "lat": 36.89345, "lng": 126.9335, "status": ""}, {"seq": 8, "no": "2365", "road": "와우리 마을회관", "name": "", "lat": 36.89353, "lng": 126.9344, "status": ""}, {"seq": 9, "no": "2366", "road": "와우리 마을회관", "name": "", "lat": 36.89345, "lng": 126.9353, "status": ""}, {"seq": 10, "no": "2367", "road": "와우리 마을회관", "name": "", "lat": 36.89353, "lng": 126.9362, "status": ""}, {"seq": 11, "no": "2368", "road": "와우리 마을회관", "name": "", "lat": 36.89345, "lng": 126.9371, "status": ""}, {"seq": 12, "no": "2369", "road": "와우리 마을회관", "name": "", "lat": 36.89353, "lng": 126.938, "status": ""}, {"seq": 13, "no": "2370", "road": "와우리 마을회관", "name": "", "lat": 36.8929, "lng": 126.9335, "status": ""}, {"seq": 14, "no": "2371", "road": "와우리 마을회관", "name": "", "lat": 36.89298, "lng": 126.9344, "status": ""}, {"seq": 15, "no": "2372", "road": "와우리 마을회관", "name": "", "lat": 36.8929, "lng": 126.9353, "status": ""}, {"seq": 16, "no": "2373", "road": "와우리 마을회관", "name": "", "lat": 36.89298, "lng": 126.9362, "status": ""}, {"seq": 17, "no": "2374", "road": "와우리 마을회관", "name": "", "lat": 36.8929, "lng": 126.9371, "status": ""}, {"seq": 18, "no": "2375", "road": "와우리 마을회관", "name": "", "lat": 36.89298, "lng": 126.938, "status": ""}, {"seq": 19, "no": "2376", "road": "와우리 마을회관", "name": "", "lat": 36.89235, "lng": 126.9335, "status": ""}, {"seq": 20, "no": "2377", "road": "와우리 마을회관", "name": "", "lat": 36.89243, "lng": 126.9344, "status": ""}, {"seq": 21, "no": "2378", "road": "와우리 마을회관", "name": "", "lat": 36.89235, "lng": 126.9353, "status": ""}, {"seq": 22, "no": "11380", "road": "와우리 마을회관", "name": "", "lat": 36.89243, "lng": 126.9362, "status": ""}, {"seq": 23, "no": "2379", "road": "와우리 마을회관", "name": "", "lat": 36.89235, "lng": 126.9371, "status": ""}, {"seq": 24, "no": "10702", "road": "와우리 마을회관", "name": "", "lat": 36.89243, "lng": 126.938, "status": ""}, {"seq": 25, "no": "2380", "road": "와우리 마을회관", "name": "", "lat": 36.8918, "lng": 126.9335, "status": ""}, {"seq": 26, "no": "2390", "road": "와우리 마을회관", "name": "", "lat": 36.89188, "lng": 126.9344, "status": ""}, {"seq": 27, "no": "2381", "road": "와우리 마을회관", "name": "", "lat": 36.8918, "lng": 126.9353, "status": ""}, {"seq": 28, "no": "2382", "road": "와우리 마을회관", "name": "", "lat": 36.89188, "lng": 126.9362, "status": ""}, {"seq": 29, "no": "2383", "road": "와우리 마을회관", "name": "", "lat": 36.8918, "lng": 126.9371, "status": ""}, {"seq": 30, "no": "2384", "road": "와우리 마을회관", "name": "", "lat": 36.89188, "lng": 126.938, "status": ""}, {"seq": 31, "no": "2385", "road": "와우리 마을회관", "name": "", "lat": 36.89125, "lng": 126.9335, "status": ""}, {"seq": 32, "no": "2386", "road": "와우리 마을회관", "name": "", "lat": 36.89133, "lng": 126.9344, "status": ""}, {"seq": 33, "no": "2389", "road": "와우리 마을회관", "name": "", "lat": 36.89125, "lng": 126.9353, "status": ""}, {"seq": 34, "no": "7286", "road": "와우리 마을회관", "name": "", "lat": 36.89133, "lng": 126.9362, "status": ""}, {"seq": 35, "no": "2355", "road": "와우리 마을회관", "name": "", "lat": 36.89125, "lng": 126.9371, "status": ""}, {"seq": 36, "no": "2356", "road": "와우리 마을회관", "name": "", "lat": 36.89133, "lng": 126.938, "status": ""}, {"seq": 37, "no": "2357", "road": "와우리 마을회관", "name": "", "lat": 36.8907, "lng": 126.9335, "status": ""}], "polygon": [[36.8945, 126.933], [36.8945, 126.93920000000001], [36.8892, 126.93920000000001], [36.8892, 126.933]]}};
+let current=Object.keys(areas)[0], map, markers=[], polygon, meMarker, watchId=null, selectedSeq=null;
+const key=()=> "inju-test-"+current;
+function saved(){return JSON.parse(localStorage.getItem(key())||"{}")}
+function saveState(seq,status){const s=saved(); s[seq]=status; localStorage.setItem(key(),JSON.stringify(s)); renderAll();}
+function getStatus(h){return saved()[h.seq] ?? h.status ?? ""}
+function init(){
+ map=L.map('map').setView(areas[current].center,16);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+ renderTabs(); renderAll();
+}
+function renderTabs(){
+ document.getElementById('tabs').innerHTML=Object.keys(areas).map(t=>`<button class="tab ${t===current?'active':''}" onclick="selectArea('${t}')">${t}</button>`).join('');
+}
+function selectArea(t){current=t; selectedSeq=null; renderTabs(); renderAll();}
+function renderAll(){renderMap(); renderAddressBook(); renderProgress();}
+function renderMap(){
+ const a=areas[current];
+ if(polygon) map.removeLayer(polygon); markers.forEach(m=>map.removeLayer(m)); markers=[];
+ polygon=L.polygon(a.polygon,{color:a.color,fillColor:a.fill,fillOpacity:.28,weight:3}).addTo(map);
+ a.houses.forEach(h=>{
+  const st=getStatus(h);
+  const cls=st==='done'?'marker-done':st==='absent'?'marker-absent':st==='reject'?'marker-reject':st==='empty'?'marker-empty':'';
+  const icon=L.divIcon({className:'',html:`<div class="marker-label ${cls}">${h.no}</div>`,iconSize:null});
+  const m=L.marker([h.lat,h.lng],{icon}).addTo(map).on('click',()=>{selectedSeq=h.seq; renderAddressBook(); map.setView([h.lat,h.lng],18);});
+  markers.push(m);
+ });
+ map.fitBounds(polygon.getBounds(),{padding:[18,18]});
+}
+function renderProgress(){
+ const hs=areas[current].houses; const s=saved();
+ const done=hs.filter(h=>(s[h.seq]||h.status)==='done').length;
+ const total=hs.length; const rate=total?Math.round(done/total*100):0;
+ document.getElementById('areaTitle').textContent=current;
+ document.getElementById('progress').textContent=`${rate}% (${done}/${total})`;
+ document.getElementById('countText').textContent=`총 ${total}개`;
+}
+function renderAddressBook(){
+ const q=(document.getElementById('search').value||'').trim();
+ let hs=areas[current].houses.filter(h=>!q||JSON.stringify(h).includes(q));
+ document.getElementById('addrList').innerHTML=hs.map(h=>{
+  const st=getStatus(h);
+  return `<div class="addrRow ${selectedSeq===h.seq?'active':''}" onclick="goHouse(${h.seq})">
+   <div class="seq">${h.seq}</div><div class="no">${h.no}</div><div class="road">${h.road}</div><div class="name">${h.name||''}</div>
+   <div class="statusBtns" onclick="event.stopPropagation()">
+    <button class="done" onclick="saveState(${h.seq},'done')">방문</button>
+    <button class="absent" onclick="saveState(${h.seq},'absent')">부재</button>
+    <button class="reject" onclick="saveState(${h.seq},'reject')">거절</button>
+    <button class="empty" onclick="saveState(${h.seq},'empty')">기타</button>
+   </div></div>`;
+ }).join('');
+}
+function goHouse(seq){const h=areas[current].houses.find(x=>x.seq===seq); selectedSeq=seq; renderAddressBook(); map.setView([h.lat,h.lng],18);}
+function startGps(){
+ if(!navigator.geolocation){document.getElementById('gpsStatus').textContent='GPS를 지원하지 않습니다.';return;}
+ if(watchId) navigator.geolocation.clearWatch(watchId);
+ watchId=navigator.geolocation.watchPosition(pos=>{
+  const lat=pos.coords.latitude,lng=pos.coords.longitude;
+  if(meMarker) map.removeLayer(meMarker);
+  meMarker=L.circleMarker([lat,lng],{radius:9,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.9}).addTo(map);
+  let nearest=null,best=Infinity;
+  areas[current].houses.forEach(h=>{const d=Math.hypot((lat-h.lat)*111000,(lng-h.lng)*88000); if(d<best){best=d;nearest=h;}});
+  document.getElementById('gpsStatus').innerHTML=`현재 위치 표시 중<br>가장 가까운 건물: <b>${nearest.no}</b> / 약 ${Math.round(best)}m`;
+ },err=>{document.getElementById('gpsStatus').textContent='GPS 권한을 허용해 주세요.';},{enableHighAccuracy:true});
+}
+function resetCurrentArea(){if(confirm('현재 구역 기록을 초기화할까요?')){localStorage.removeItem(key()); renderAll();}}
+init();
+</script>
+</body>
+</html>
